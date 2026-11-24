@@ -1,0 +1,14 @@
+# Build-Ausgaben
+/build/
+/.build/
+.swiftpm/
+*.xcodeproj/xcuserdata/
+DerivedData/
+
+# Exportierte Stellenanzeigen nie einchecken
+*.pdf
+*.md
+!README.md
+
+# macOS
+.DS_Store
