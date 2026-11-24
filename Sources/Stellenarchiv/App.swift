@@ -125,7 +125,11 @@ final class AppModel: ObservableObject {
         }
         if let data = Self.store.data(forKey: "history"),
            let items = try? JSONDecoder().decode([HistoryItem].self, from: data) {
-            history = items
+            history = Self.backfillURLs(items)
+            // didSet greift im init nicht – nachgetragene Links direkt speichern
+            if history != items, let data = try? JSONEncoder().encode(history) {
+                Self.store.set(data, forKey: "history")
+            }
         }
     }
 
@@ -226,6 +230,30 @@ final class AppModel: ObservableObject {
         } else {
             let what = n == 1 ? "1 Eintrag" : "\(n) Einträge"
             status = trashFiles ? "\(what) entfernt, Dateien im Papierkorb." : "\(what) aus dem Verlauf entfernt."
+        }
+    }
+
+    /// Ältere Einträge haben keinen Original-Link gespeichert – er steht aber als
+    /// `quelle:` in den Kopfdaten der Markdown-Datei daneben.
+    private static func backfillURLs(_ items: [HistoryItem]) -> [HistoryItem] {
+        items.map { item in
+            guard item.url == nil else { return item }
+            let text: String
+            do { text = try String(contentsOf: item.markdownURL, encoding: .utf8) }
+            catch { NSLog("Stellenarchiv: Link-Nachtrag fehlgeschlagen: %@", error.localizedDescription); return item }
+            for line in text.split(separator: "\n").prefix(20) where line.hasPrefix("quelle:") {
+                var value = line.dropFirst("quelle:".count).trimmingCharacters(in: .whitespaces)
+                if value.hasPrefix("\""), value.hasSuffix("\""), value.count >= 2 {
+                    value = String(value.dropFirst().dropLast())
+                        .replacingOccurrences(of: "\\\"", with: "\"")
+                        .replacingOccurrences(of: "\\\\", with: "\\")
+                }
+                guard let url = URL(string: value), url.scheme?.hasPrefix("http") == true else { break }
+                var fixed = item
+                fixed.url = url.absoluteString
+                return fixed
+            }
+            return item
         }
     }
 
